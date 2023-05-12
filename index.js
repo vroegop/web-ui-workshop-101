@@ -1,163 +1,89 @@
 import { LitElement, html } from 'lit-element';
-import { CognitoUserPool, CognitoUser, AuthenticationDetails } from 'amazon-cognito-identity-js';
-import axios from 'axios';
+import { Amplify } from 'aws-amplify';
+import { Auth } from 'aws-amplify';
+import { API } from 'aws-amplify';
 
-const userPoolId = 'your-user-pool-id';
-const clientId = 'your-client-id';
-const region = 'your-region';
-const lambdaFunctionName = 'your-lambda-function-name';
-const apiGatewayUrl = 'your-api-gateway-url';
+Amplify.configure({
+  Auth: {
+    identityPoolId: 'your-identity-pool-id',
+    region: 'your-region',
+    userPoolId: 'your-user-pool-id',
+    userPoolWebClientId: 'your-user-pool-client-id'
+  },
+  API: {
+    endpoints: [
+      {
+        name: 'MyLambdaAPI',
+        endpoint: 'your-lambda-endpoint'
+      }
+    ]
+  }
+});
 
 class MyLoginComponent extends LitElement {
   static get properties() {
     return {
-      isLoggedIn: { type: Boolean },
       username: { type: String },
       password: { type: String },
-      result: { type: Object },
-      token: { type: String },
+      isLoggedIn: { type: Boolean }
     };
-  }
-
-  static get styles() {
-    return css`
-      my-login-component {
-      display: block;
-      background-color: #333;
-      color: #fff;
-      padding: 2rem;
-    }
-
-    input[type="text"],
-    input[type="password"],
-    button[type="submit"] {
-      display: block;
-      margin-bottom: 1rem;
-      padding: 0.5rem;
-      border-radius: 0.25rem;
-      border: none;
-      background-color: #222;
-      color: #fff;
-    }
-
-    button[type="submit"] {
-      background-color: #00adff;
-      color: #000;
-    }
-
-    button[type="submit"]:hover {
-      background-color: #0092cc;
-      cursor: pointer;
-    }
-
-    button {
-      display: block;
-      margin-top: 1rem;
-      padding: 0.5rem;
-      border-radius: 0.25rem;
-      border: none;
-      background-color: #00adff;
-      color: #000;
-    }
-
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    button:hover {
-      background-color: #0092cc;
-      cursor: pointer;
-    }
-
-    p {
-      margin-top: 1rem;
-      font-size: 0.75rem;
-      font-weight: bold;
-    }
-  `;
   }
 
   constructor() {
     super();
-    this.isLoggedIn = false;
     this.username = '';
     this.password = '';
-    this.result = {};
-    this.token = '';
+    this.isLoggedIn = false;
   }
 
-  async handleLogin(event) {
-    event.preventDefault();
-
-    const userPool = new CognitoUserPool({
-      UserPoolId: userPoolId,
-      ClientId: clientId,
-    });
-
-    const authenticationData = {
-      Username: this.username,
-      Password: this.password,
-    };
-
-    const authenticationDetails = new AuthenticationDetails(authenticationData);
-    const cognitoUser = new CognitoUser({
-      Username: this.username,
-      Pool: userPool,
-    });
-
-    cognitoUser.authenticateUser(authenticationDetails, {
-      onSuccess: (result) => {
-        console.log('Authentication succeeded:', result);
-        this.token = result.getAccessToken().getJwtToken();
-        this.result = {};
-        this.isLoggedIn = true;
-      },
-      onFailure: (error) => {
-        console.error('Authentication failed:', error);
-        this.result = { message: 'Authentication failed' };
-        this.isLoggedIn = false;
-      },
-    });
-  }
-
-  async handleInvokeLambda(event) {
-    event.preventDefault();
-
-    if (!this.token) {
-      console.error('No authentication token available');
-      this.result = { message: 'Not authenticated' };
-      return;
-    }
-
+  async handleLogin() {
     try {
-      const response = await axios.post(
-        `${apiGatewayUrl}/${lambdaFunctionName}`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${this.token}`,
-          },
-        }
-      );
-      console.log('API call succeeded:', response.data);
-      this.result = response.data;
-    } catch (error) {
-      console.error('API call failed:', error.response.data);
-      this.result = error.response.data;
+      const user = await Auth.signIn(this.username, this.password);
+      console.log('Logged in user:', user);
+      this.isLoggedIn = true;
+    } catch (err) {
+      console.error('Login error:', err);
+      // Handle login errors
+    }
+  }
+
+  async handleCallLambda() {
+    try {
+      const user = await Auth.currentAuthenticatedUser();
+      const token = user.signInUserSession.accessToken.jwtToken;
+      const lambdaResult = await API.post('MyLambdaAPI', '/myLambdaFunction', {
+        headers: {
+          Authorization: token
+        },
+        body: {}
+      });
+      console.log('Lambda result:', lambdaResult);
+      // Do something with the Lambda result
+    } catch (err) {
+      console.error('Lambda call error:', err);
+      // Handle Lambda call errors
     }
   }
 
   render() {
-    return html`
-      <form @submit="${this.handleLogin}">
-        <input type="text" placeholder="Username" .value="${this.username}" @input="${(event) => { this.username = event.target.value; }}" required>
-        <input type="password" placeholder="Password" .value="${this.password}" @input="${(event) => { this.password = event.target.value; }}" required>
-        <button type="submit">Login</button>
-      </form>
-      <button @click="${this.handleInvokeLambda}" ?disabled="${!this.isLoggedIn}">Invoke Lambda Function</button>
-      ${this.result && this.result.message ? html`<p>${this.result.message}</p>` : ''}
-    `;
+    if (!this.isLoggedIn) {
+      return html`
+        <form>
+          <label for="username">Username:</label>
+          <input type="text" id="username" .value="${this.username}" @input="${(e) => this.username = e.target.value}" />
+          <br />
+          <label for="password">Password:</label>
+          <input type="password" id="password" .value="${this.password}" @input="${(e) => this.password = e.target.value}" />
+          <br />
+          <button type="button" @click="${this.handleLogin}">Log In</button>
+        </form>
+      `;
+    } else {
+      return html`
+        <p>You are logged in.</p>
+        <button type="button" @click="${this.handleCallLambda}">Call Lambda</button>
+      `;
+    }
   }
 }
 
