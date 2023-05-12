@@ -19,6 +19,65 @@ class MyLoginComponent extends LitElement {
     };
   }
 
+  static get styles() {
+    return css`
+      my-login-component {
+      display: block;
+      background-color: #333;
+      color: #fff;
+      padding: 2rem;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    button[type="submit"] {
+      display: block;
+      margin-bottom: 1rem;
+      padding: 0.5rem;
+      border-radius: 0.25rem;
+      border: none;
+      background-color: #222;
+      color: #fff;
+    }
+
+    button[type="submit"] {
+      background-color: #00adff;
+      color: #000;
+    }
+
+    button[type="submit"]:hover {
+      background-color: #0092cc;
+      cursor: pointer;
+    }
+
+    button {
+      display: block;
+      margin-top: 1rem;
+      padding: 0.5rem;
+      border-radius: 0.25rem;
+      border: none;
+      background-color: #00adff;
+      color: #000;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    button:hover {
+      background-color: #0092cc;
+      cursor: pointer;
+    }
+
+    p {
+      margin-top: 1rem;
+      font-size: 0.75rem;
+      font-weight: bold;
+    }
+  `;
+  }
+
   constructor() {
     super();
     this.isLoggedIn = false;
